@@ -61,23 +61,13 @@ async def fetch_asset(client: httpx.AsyncClient, url: str) -> dict | None:
 
 async def call_gemini(parts: list) -> str:
     payload = {
-        "contents": [{"role": "user", "parts": parts}],
+        "contents": [{
+            "role": "user",
+            "parts": parts
+        }],
         "generationConfig": {
             "temperature": 0.2,
-            "maxOutputTokens": 1024,
-        },
-        "systemInstruction": {
-            "parts": [{
-                "text": (
-                    "You are a precise question-answering assistant. "
-                    "Answer the user's query directly and concisely. "
-                    "No markdown, no bullet points unless explicitly asked for a list. "
-                    "No preamble, no trailing explanation. "
-                    "If the query is about provided assets/documents/images, analyse and use them. "
-                    "Single sentence answers when possible. "
-                    "No newlines in your response."
-                )
-            }]
+            "maxOutputTokens": 256
         }
     }
 
