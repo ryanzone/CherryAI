@@ -16,8 +16,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if not GEMINI_API_KEY:
     print("WARNING: GEMINI_API_KEY is not set. API calls will fail.")
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
-
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent"
 # ── Models ────────────────────────────────────────────────────────────────────
 
 class QueryRequest(BaseModel):
@@ -62,7 +61,7 @@ async def fetch_asset(client: httpx.AsyncClient, url: str) -> dict | None:
 async def call_gemini(parts: list) -> str:
     payload = {
         "contents": [{
-            "role": "user",
+            
             "parts": parts
         }],
         "generationConfig": {
