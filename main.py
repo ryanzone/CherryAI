@@ -125,10 +125,7 @@ async def answer(request: QueryRequest):
 
     output = await call_groq(parts)
 
-    return {
-        "answer": output,
-        "output": output
-    }
+    return {"output": output}
 
 # ── Run ───────────────────────────────────────────────
 
