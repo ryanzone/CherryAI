@@ -93,29 +93,6 @@ async def call_gemini(parts: list) -> str:
     except (KeyError, IndexError):
         raise HTTPException(status_code=502, detail=f"Gemini error: {json.dumps(data)}")
 
-# ── Main Endpoint ─────────────────────────────────────────────────────────────
-
-@app.post("/v1/answer", response_model=QueryResponse)
-async def answer(request: QueryRequest):
-    query = request.query.strip()
-    if not query:
-        raise HTTPException(status_code=400, detail="Query cannot be empty.")
-
-    parts = []
-
-    if request.assets:
-        async with httpx.AsyncClient() as client:
-            asset_parts = await asyncio.gather(
-                *[fetch_asset(client, url) for url in request.assets]
-            )
-        for p in asset_parts:
-            if p:
-                parts.append(p)
-
-    parts.append({"text": query})
-
-    output = await call_gemini(parts)
-    return QueryResponse(output=output)
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
