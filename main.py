@@ -65,7 +65,7 @@ async def call_groq(parts: list) -> str:
         "messages": [
             {
                 "role": "system",
-                "content": "Answer directly. If numeric return only number. No explanation."
+                "content": "Answer clearly in one short sentence. Avoid long explanations."
             },
             {
                 "role": "user",
