@@ -13,6 +13,9 @@ app = FastAPI()
 # ── Config ────────────────────────────────────────────────────────────────────
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+if not GEMINI_API_KEY:
+    print("WARNING: GEMINI_API_KEY is not set. API calls will fail.")
+
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -42,11 +45,11 @@ async def fetch_asset(client: httpx.AsyncClient, url: str) -> dict | None:
         if ct in IMAGE_TYPES or ext in IMAGE_EXTS:
             b64 = base64.b64encode(r.content).decode()
             mime = ct if ct in IMAGE_TYPES else "image/jpeg"
-            return {"inline_data": {"mime_type": mime, "data": b64}}
+            return {"inlineData": {"mimeType": mime, "data": b64}}
 
         if ct == "application/pdf" or ext == ".pdf":
             b64 = base64.b64encode(r.content).decode()
-            return {"inline_data": {"mime_type": "application/pdf", "data": b64}}
+            return {"inlineData": {"mimeType": "application/pdf", "data": b64}}
 
         text = r.text[:12000]
         return {"text": f"[Asset from {url}]:\n{text}"}
@@ -78,20 +81,43 @@ async def call_gemini(parts: list) -> str:
         }
     }
 
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured on the server.")
+
     async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(
-            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
-            json=payload,
-            headers={"Content-Type": "application/json"}
-        )
-        r.raise_for_status()
-        data = r.json()
+        try:
+            r = await client.post(
+                f"{GEMINI_URL}?key={GEMINI_API_KEY}",
+                json=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            r.raise_for_status()
+            data = r.json()
+        except httpx.HTTPStatusError as e:
+            # Try to get error detail from Gemini response
+            try:
+                err_data = e.response.json()
+                msg = err_data.get("error", {}).get("message", str(e))
+            except:
+                msg = str(e)
+            raise HTTPException(status_code=e.response.status_code, detail=f"Gemini API error: {msg}")
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=503, detail=f"Failed to connect to Gemini: {e}")
 
     try:
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        candidates = data.get("candidates", [])
+        if not candidates:
+            raise HTTPException(status_code=502, detail=f"Gemini returned no results: {json.dumps(data)}")
+        
+        text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        if not text:
+            # Handle cases where safety filters might have blocked the response
+            finish_reason = candidates[0].get("finishReason", "UNKNOWN")
+            return f"[No text response. Reason: {finish_reason}]"
+
         return text.strip().replace("\n", " ")
-    except (KeyError, IndexError):
-        raise HTTPException(status_code=502, detail=f"Gemini error: {json.dumps(data)}")
+    except (KeyError, IndexError) as e:
+        raise HTTPException(status_code=502, detail=f"Error parsing Gemini response: {str(e)}. Data: {json.dumps(data)}")
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
