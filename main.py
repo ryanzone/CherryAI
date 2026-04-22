@@ -65,14 +65,14 @@ async def call_groq(parts: list) -> str:
         "messages": [
             {
                 "role": "system",
-                "content": "Answer clearly in one short sentence. Avoid long explanations."
+                "content": "Answer clearly in one natural, complete sentence that directly addresses the query (e.g., 'The sum is 25' or 'The capital is Paris'). Do not provide extra explanation. Vary your phrasing naturally to keep responses fresh."
             },
             {
                 "role": "user",
                 "content": text_input
             }
         ],
-        "temperature": 0.2,
+        "temperature": 0.7,
         "max_tokens": 256
     }
 
@@ -120,12 +120,15 @@ async def answer(request: QueryRequest):
     # Add query with strict instruction
     parts.append({
         "type": "text",
-        "text": "Answer clearly in one short sentence. Avoid long explanations. " + query
+        "text": "Provide a complete, natural sentence answer. Example: 'The sum is 25'. " + query
     })
 
     output = await call_groq(parts)
 
-    return {"output": output}
+    return {
+        "answer": output,
+        "output": output
+    }
 
 # ── Run ───────────────────────────────────────────────
 
