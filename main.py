@@ -120,7 +120,7 @@ async def answer(request: QueryRequest):
     # Add query with strict instruction
     parts.append({
         "type": "text",
-        "text": "Answer directly. No explanation. If numeric return only number: " + query
+        "text": "Answer clearly in one short sentence. Avoid long explanations. " + query
     })
 
     output = await call_groq(parts)
