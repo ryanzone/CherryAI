@@ -136,7 +136,6 @@ async def answer(request: QueryRequest):
 
     parts = []
 
-    # Handle assets
     if request.assets:
         async with httpx.AsyncClient() as client:
             asset_parts = await asyncio.gather(
@@ -146,10 +145,8 @@ async def answer(request: QueryRequest):
             if p:
                 parts.append(p)
 
-    # Add query
     parts.append({"text": query})
 
-    # Call Gemini
     output = await call_gemini(parts)
 
     return {"output": output}
