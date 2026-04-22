@@ -12,9 +12,10 @@ app = FastAPI()
 
 # ── Config ─────────────────────────────────────────────────────
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = "llama-3.2-90b-vision-preview"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+# ✅ FINAL WORKING MODEL + ENDPOINT
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent"
 
 # ── Models ─────────────────────────────────────────────────────
 
@@ -25,65 +26,49 @@ class QueryRequest(BaseModel):
 # ── Asset Fetcher ─────────────────────────────────────────────
 
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+IMAGE_EXTS  = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
 async def fetch_asset(client: httpx.AsyncClient, url: str) -> dict | None:
     if not isinstance(url, str) or not url.startswith("http"):
-        return {"type": "text", "text": f"[asset: {url}]"}
+        return {"text": f"[asset: {url}]"}
     try:
         r = await client.get(url, timeout=10)
         ct = r.headers.get("content-type", "").split(";")[0].lower()
 
         if ct in IMAGE_TYPES:
-            b64 = base64.b64encode(r.content).decode()
             return {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:{ct};base64,{b64}"
+                "inlineData": {
+                    "mimeType": ct,
+                    "data": base64.b64encode(r.content).decode()
                 }
             }
 
-        return {"type": "text", "text": r.text[:8000]}
+        return {"text": r.text[:8000]}
 
     except Exception as e:
-        return {"type": "text", "text": f"[error loading asset: {e}]"}
+        return {"text": f"[error loading asset: {e}]"}
 
-# ── Groq Call ─────────────────────────────────────────────────
+# ── Gemini Call ───────────────────────────────────────────────
 
-async def call_groq(content: list) -> str:
-    if not GROQ_API_KEY:
-        raise HTTPException(status_code=500, detail="GROQ_API_KEY not set")
-
+async def call_gemini(parts: list) -> str:
     payload = {
-        "model": GROQ_MODEL,
-        "messages": [
-            {
-                "role": "user",
-                "content": content
-            }
-        ],
-        "temperature": 0.2,
-        "max_tokens": 256
+        "contents": [{
+            "parts": parts
+        }]
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
-            GROQ_URL,
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            }
+            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
+            json=payload
         )
-        
-        if r.status_code != 200:
-            raise HTTPException(status_code=r.status_code, detail=r.text)
-            
+
         data = r.json()
 
-    try:
-        return data["choices"][0]["message"]["content"].strip()
-    except (KeyError, IndexError) as e:
-        raise HTTPException(status_code=502, detail=f"Groq parse error: {e}. Data: {json.dumps(data)}")
+    if "candidates" not in data:
+        raise HTTPException(status_code=500, detail=str(data))
+
+    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
 # ── Routes ───────────────────────────────────────────────────
 
@@ -98,19 +83,20 @@ async def answer(request: QueryRequest):
     if not query:
         raise HTTPException(status_code=400, detail="Query empty")
 
-    content_parts = []
+    parts = []
 
     # assets
     if request.assets:
         async with httpx.AsyncClient() as client:
             res = await asyncio.gather(*[fetch_asset(client, a) for a in request.assets])
-        content_parts.extend([p for p in res if p])
+        parts.extend([p for p in res if p])
 
     # 🔥 IMPORTANT PROMPT CONTROL
-    prompt = "Answer directly. No explanation. If numeric return only number: " + query
-    content_parts.append({"type": "text", "text": prompt})
+    parts.append({
+        "text": "Answer directly. No explanation. If numeric return only number: " + query
+    })
 
-    output = await call_groq(content_parts)
+    output = await call_gemini(parts)
 
     return {"output": output}
 
